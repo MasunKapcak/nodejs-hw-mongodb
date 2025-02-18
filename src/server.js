@@ -1,105 +1,33 @@
-// express sunucusunun çalışma mantığını içerecek.
-//setupServer adında bir fonksiyon oluşturun; bu fonksiyon express sunucusunu oluşturacak.
-//  Bu fonksiyon şunları içermelidir:
-//express() çağrısıyla sunucunun oluşturulması
-//cors ve pino logger'ının ayarlanması
-//Mevcut olmayan rotalar için 404 hata durumu ve uygun mesaj döndürülmesi.{message: 'Not found'}
-// Sunucunun, PORT ortam değişkeni aracılığıyla belirtilen veya belirtilmemişse 3000 numaralı portta başlatılması
-//Sunucu başarıyla başlatıldığında konsola “Server is running on port {PORT}” mesajının yazdırılması; burada {PORT} sizin port numaranızdır
-
 import express from 'express';
+import pino from 'pino-http';
 import cors from 'cors';
-import pino from 'pino';
-import {getAllContacts, getContactById} from './services/contacts.js';
-const setupServer = ()=>{
-    const server = express();
+import { env } from './utils/env.js';
+import contactsRouter from './routers/contacts.js';
+import { notFoundHandler } from './middlewares/notFoundHandler.js';
+import { ctrlWrapper } from './utils/ctrlWrapper.js';
+import { errorHandler } from './middlewares/errorHandler.js';
 
-    const logger = pino({
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true, // Renkli çıktı
-            translateTime: true, // Tarih ve saat bilgisi ekleme
-          },
-        },
-      });
+const PORT = Number(env('PORT', 3000));
+const app = express();
 
-
-    server.use(express.json());
-    server.use(cors());
-
-    const PORT= Number(process.env.PORT || 3000 );
-
-
-    //getAllContacts getContactById
-
-
-    server.get('/contacts', async(req,res)=>{
-    
-    try{
-        const contacts = await getAllContacts();
-
-        res.status(200).json({
-            status: 200,
-            message: "Successfully found contacts!",
-            data: contacts,
-                // İstek işlenmesi sonucunda elde edilen iletişimler dizisi
-        });
-    }catch(error){
-        res.status(500).json({
-            status: 500,
-            message: "server error !",
-            data: error.message,
-        });
-    }
-
-});
-
-
-server.get('/contacts/:contactId', async(req,res)=>{
-    
-    try{
-        const {contactId} = req.params;
-        const contact = await getContactById(contactId);
-    
-        res.status(200).json({
-            status: 200,
-            message: `Successfully found contact with id ${contactId} !`,
-            data:contact
-        });
-    
-        if(!contact){
-            res.status(404).json({
-                status: 404,
-                message: 'Contact not found',
-                data: contact,
-                //Verilen kimlik numarasıyla iletişimin bulunup bulunmadığını kontrol edin. Eğer iletişim bulunamazsa, 404 durum kodu ile aşağıdaki nesneyi döndürün
-                    // İstek işlenmesi sonucunda elde edilen iletişim
-            });
-            return;
-        }
-    }catch(error){
-        res.status(500).json({
-            status:500,
-            data: error.message,
-            message:"server error",
-        })
-    }
-
-
-});
-
-server.get('*',(req,res)=>{
-    
-    res.status(404).json({
-        status: 404,
-        message: "Not available route",
-    });
-});
-
-server.listen(PORT,()=>{
-    logger.info(`Server is running on port ${PORT}`);
-});
-}
-
-export default setupServer;
+export const setupServer = () => {
+  app.use(
+    pino({
+      transport: {
+        target: 'pino-pretty',
+      },
+    }),
+  );
+  app.use(cors());
+  app.use(
+    express.json({
+      type: ['application/json', 'application/vnd.api+json'],
+    }),
+  );
+  app.use(contactsRouter);
+  app.use('*', ctrlWrapper(notFoundHandler));
+  app.use(errorHandler);
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+};
